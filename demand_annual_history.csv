@@ -1,0 +1,4 @@
+scheme_year,year_start,gross_twh,eii_twh,basis
+2021/22,2021,270.0,11.5,DESNZ RO calculation (RO supply 256.8 + EII exempt 11.5) x 1.0065 to Ofgem FIT basis
+2022/23,2022,256.5,9.5,DESNZ RO calculation (RO supply 245.3 + EII exempt 9.5) x 1.0065 to Ofgem FIT basis
+2023/24,2023,251.8,8.84,DESNZ RO calculation (RO supply 241.32 + EII exempt 8.84) x 1.0065 to Ofgem FIT basis

@@ -127,9 +127,14 @@ def generation_period(year: int, quarter: int, lag: int) -> tuple[int, int]:
 
 # ---------------------------------------------------------------- forecast
 
-def forecast(inputs: dict, weather: Weather, lag: int = 1, calibrate: bool = True,
+def forecast(inputs: dict, weather: Weather, liable: dict, liable_q: dict | None = None, lag: int = 1,
+             calibrate: bool = True, annual_adj_per_mwh: float = 0.50,
              start_year: int = BASE_YEAR, years: int = 6) -> dict:
+    """annual_adj_per_mwh: the extra cost the annual levelisation adds on top of the four periodic
+    quarters, in £ per MWh of liable demand. Ofgem's published annual figure replaces it."""
     p, q, a, t = inputs["portfolio"], inputs["quarters"], inputs["annual"], inputs["tariff"]
+    demand = {int(k): v for k, v in liable.items()}     # liable demand TWh by delivery year (history and forecast)
+    liable_q = liable_q or {}
     pf = portfolio_by_year(p)
     yrs = list(range(start_year, start_year + years))
     hist_years = sorted(q["year_start"].astype(int).unique())
@@ -171,19 +176,41 @@ def forecast(inputs: dict, weather: Weather, lag: int = 1, calibrate: bool = Tru
                              "Weather index": w, "Actual solar days": known,
                              "Generation period": f"{solar.label(fy)} {QUARTER_NAMES[cq][3:]}"})
     qdf = pd.DataFrame(rows)
+    qdf["Liable TWh"] = [liable_q.get((y, qq), np.nan) for y, qq in zip(qdf["year_start"], qdf["quarter"])]
+    qdf["Levy £/MWh"] = qdf["Cost £m"] / qdf["Liable TWh"]
 
     annual = qdf.groupby(["year_start", "Delivery year", "Case"], as_index=False).agg(
-        **{"Cost £m": ("Cost £m", "sum"), "Quarters actual": ("Status", lambda s: int((s == "Actual").sum()))})
+        **{"Periodic quarters £m": ("Cost £m", "sum"), "Quarters actual": ("Status", lambda s: int((s == "Actual").sum()))})
+    annual["Liable demand TWh"] = annual["year_start"].map(demand)
+    # £/MWh x TWh = £m
+    annual["Annual levelisation £m"] = annual_adj_per_mwh * annual["Liable demand TWh"].fillna(0)
     annual["Source"] = np.select(
         [annual["Quarters actual"] == 4, annual["Quarters actual"] > 0],
-        ["Ofgem quarterly actuals", annual["Quarters actual"].astype(str) + " actual quarters + forecast"],
+        ["4 actual quarters + forecast annual levelisation",
+         annual["Quarters actual"].astype(str) + " actual quarters + forecast"],
         default="Forecast")
-    for _, r in a.dropna(subset=["levelisation_fund_gbp_m"]).iterrows():
+    published = a.dropna(subset=["levelisation_fund_gbp_m"])
+    for _, r in published.iterrows():
         m = annual["year_start"] == int(r.year_start)
-        annual.loc[m, "Cost £m"] = r.levelisation_fund_gbp_m
+        annual.loc[m, "Annual levelisation £m"] = r.levelisation_fund_gbp_m - annual.loc[m, "Periodic quarters £m"]
         annual.loc[m, "Source"] = "Ofgem annual levelisation"
+    annual["Cost £m"] = annual["Periodic quarters £m"] + annual["Annual levelisation £m"]
+    annual["Levy £/MWh"] = annual["Cost £m"] / annual["Liable demand TWh"]
 
-    return {"quarters": qdf, "annual": annual, "calibration": calibration, "calibration_table": cal_tbl,
+    # Annual levelisation seen in past years: (annual figure - four periodic quarters) / liable demand
+    hist = []
+    qa = q[q["status"].eq("actual")].groupby("year_start")["levelisation_fund_gbp_m"].agg(["sum", "count"])
+    for _, r in published.iterrows():
+        y = int(r.year_start)
+        if y in qa.index and qa.loc[y, "count"] == 4 and pd.notna(demand.get(y)):
+            hist.append({"Delivery year": solar.label(y), "Periodic quarters £m": qa.loc[y, "sum"],
+                         "Annual levelisation £m": r.levelisation_fund_gbp_m,
+                         "Adjustment £m": r.levelisation_fund_gbp_m - qa.loc[y, "sum"],
+                         "Adjustment £/MWh": (r.levelisation_fund_gbp_m - qa.loc[y, "sum"]) / demand[y]})
+    annual_history = pd.DataFrame(hist)
+
+    return {"quarters": qdf, "annual": annual, "annual_history": annual_history, "annual_adj_per_mwh": annual_adj_per_mwh,
+            "calibration": calibration, "calibration_table": cal_tbl,
             "shares": shares, "profile_year": profile_year, "tariff_index": idx,
             "weather_factors": pd.DataFrame(weather.factors).T, "weather_years": weather.years}
 
@@ -194,7 +221,10 @@ def wide_table(fc: dict, case: str) -> pd.DataFrame:
     w = q.pivot(index="Delivery year", columns="Quarter", values="Cost £m")[list(QUARTER_NAMES.values())]
     status = q.pivot(index="Delivery year", columns="Quarter", values="Status")[list(QUARTER_NAMES.values())]
     ann = fc["annual"][fc["annual"]["Case"] == case].set_index("Delivery year")
+    w["Periodic total"] = ann["Periodic quarters £m"]
+    w["Annual levelisation"] = ann["Annual levelisation £m"]
     w["Annual total"] = ann["Cost £m"]
+    w["Levy £/MWh"] = ann["Levy £/MWh"]
     w["Basis"] = ann["Source"]
     return w, status
 

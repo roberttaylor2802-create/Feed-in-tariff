@@ -1,0 +1,13 @@
+scheme_year,year_start,quarter,period,supplied_twh,eii_exempt_twh,bics_exempt_twh,status,source
+2024/25,2024,1,Apr-Jun 2024,58.481264,2.912518,,actual,Ofgem FIT quarterly report Issue 57
+2024/25,2024,2,Jul-Sep 2024,57.555001,2.843224,,actual,Ofgem FIT quarterly report Issue 58
+2024/25,2024,3,Oct-Dec 2024,67.519282,2.839613,,actual,Ofgem FIT quarterly report Issue 59
+2024/25,2024,4,Jan-Mar 2025,70.285799,3.006545,,actual,Ofgem FIT quarterly report Issue 60
+2025/26,2025,1,Apr-Jun 2025,57.949234,3.089840,,actual,Ofgem FIT quarterly report Issue 61
+2025/26,2025,2,Jul-Sep 2025,57.030,3.150,,estimate,Estimated by Claude: 2024/25 Q2 x 2025/26 Q1 growth; replace with Ofgem Issue 62
+2025/26,2025,3,Oct-Dec 2025,67.525489,3.211180,,actual,Ofgem FIT quarterly report Issue 63
+2025/26,2025,4,Jan-Mar 2026,70.354600,3.230872,,actual,Ofgem FIT quarterly report Issue 64
+2026/27,2026,1,Apr-Jun 2026,59.217531,3.293227,,actual,Ofgem FIT quarterly report Issue 65
+2026/27,2026,2,Jul-Sep 2026,,,,awaiting,Add from Ofgem FIT quarterly report Issue 66
+2026/27,2026,3,Oct-Dec 2026,,,,awaiting,
+2026/27,2026,4,Jan-Mar 2027,,,,awaiting,
