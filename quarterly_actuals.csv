@@ -1,0 +1,13 @@
+scheme_year,year_start,quarter,period,levelisation_fund_gbp_m,status,source
+2024/25,2024,1,Apr-Jun 2024,464.2,actual,Ofgem FIT quarterly report
+2024/25,2024,2,Jul-Sep 2024,518.5,actual,Ofgem FIT quarterly report
+2024/25,2024,3,Oct-Dec 2024,346.6,actual,Ofgem FIT quarterly report
+2024/25,2024,4,Jan-Mar 2025,340.9,actual,Ofgem FIT quarterly report
+2025/26,2025,1,Apr-Jun 2025,546.3,actual,Ofgem FIT quarterly report
+2025/26,2025,2,Jul-Sep 2025,610.2,estimate,Estimated by Claude: Q1 x the 2024/25 Q2/Q1 ratio
+2025/26,2025,3,Oct-Dec 2025,432.3,actual,Ofgem FIT quarterly report
+2025/26,2025,4,Jan-Mar 2026,358.1,actual,Ofgem FIT quarterly report Issue 64
+2026/27,2026,1,Apr-Jun 2026,556.0,actual,Ofgem FIT quarterly report Issue 65
+2026/27,2026,2,Jul-Sep 2026,581.6,actual,Ofgem periodic levelisation Jul-Sep 2026 (£581645476) provided by user
+2026/27,2026,3,Oct-Dec 2026,,awaiting,
+2026/27,2026,4,Jan-Mar 2027,,awaiting,

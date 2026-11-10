@@ -1,44 +1,54 @@
-# FiT forecasting: solar
+# FiT forecasting dashboard
 
-GB solar generation for the current scheme year (1 April to 31 March) against the previous
-5 or 10 years, plus low, central and high weather scenarios.
+Streamlit app with two tabs:
 
-## Files
+1. **Solar Generation Forecasting** – GB solar for the current scheme year against the previous
+   5 or 10 years, with low / central / high weather scenarios.
+2. **FiT Cost Forecasting** – levelisation cost for each quarter and each delivery year
+   (April to March) for the next six years, updated by Ofgem's published levelisation, with
+   low / central / high solar weather cases.
 
-All files sit together at the top level of the repository:
+## Files (all at the top level of the repository)
 
-- `app.py` – the Streamlit page.
-- `solar.py` – data loading, PV_Live download and calculations.
-- `solar_daily.csv` – daily GB solar generation (GWh) and installed capacity (MWp) from
-  Sheffield Solar PV_Live, April 2016 to 9 November 2026 (2020/21 missing).
-- `requirements.txt` – Python packages.
+| File | What it is | Update when |
+|---|---|---|
+| `app.py` | The Streamlit app | – |
+| `solar.py` | Solar data and calculations | – |
+| `fit.py` | FiT cost forecast | – |
+| `solar_daily.csv` | Daily GB solar (PV_Live) | Use the app's update button, then upload the file |
+| `quarterly_actuals.csv` | Ofgem levelisation fund by quarter | Each quarter Ofgem publishes |
+| `annual_levelisation.csv` | Ofgem annual levelisation by year | Each annual reconciliation |
+| `tariff_assumptions.csv` | Tariff uplift each April (CPI) | When CPI forecasts change |
+| `fit_portfolio.csv` | Every FiT installation costed by delivery year | New Ofgem installation report |
+| `requirements.txt` | Python packages | – |
 
-## Run it
+## Adding a new Ofgem quarter
+
+1. In the app, open **FiT Cost Forecasting → Update with Ofgem levelisation and tariff assumptions**.
+2. Enter the levelisation fund in £m on the right quarter's row and set its status to `actual`.
+   The forecast updates immediately.
+3. Click **Download quarterly_actuals.csv** and upload it to this repository (Add file → Upload
+   files) so the change is kept.
+
+Or edit `quarterly_actuals.csv` directly on GitHub (pencil icon) and commit.
+
+## Run
 
 On Streamlit Community Cloud, deploy this repository with `app.py` as the main file.
+Locally (Python 3.10+): `pip install -r requirements.txt` then `streamlit run app.py`.
 
-On your own computer (Python 3.10+):
+## How the cost forecast works
 
-```
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-## Update the data
-
-Click **Update from PV_Live** in the app's sidebar to add any days missing since the last date
-in `solar_daily.csv`. On Streamlit Cloud that update is lost when the app restarts, so to keep it,
-download the latest `solar_daily.csv` and upload it to this repository.
-
-## Method
-
-- **At today's capacity:** each day's load factor (GWh ÷ installed capacity × 24 h) × the latest
-  installed capacity, so past years compare weather rather than the growth in panels.
-- **Band:** min to max, or mean ± 2 standard deviations, of the comparison years on the same day.
-  29 February is dropped so leap years line up.
-- **Weather scenarios:** every comparison year's weather replayed at today's capacity. Current
-  year = actual to date + each year's weather for the remaining days; next year = each year's
-  full-year weather. Low / central / high = P10 / P50 / P90, min / mean / max, or mean ± 1 sd.
-- **Weather factor:** scenario generation ÷ the comparison years' average for the same period;
-  use it as the solar weather factor in the FiT cost model.
-- PV_Live excludes solar sites in the Balancing Mechanism.
+- **Bottom-up model:** every installation on Ofgem's FiT register costed at its 2026/27 tariff,
+  with generation at average weather from DESNZ FiT load factors, until its eligibility ends.
+  Uplifted each April by `tariff_assumptions.csv`.
+- **Quarters:** split using the last fully actual year's quarterly pattern.
+- **Solar weather:** the solar share of each quarter is scaled by a weather index from PV_Live.
+  Levelisation mostly pays for the previous quarter's generation (setting in the app), so actual
+  solar already measured feeds the next quarter's forecast. Days still to come use the 10th /
+  50th / 90th percentile of past weather for that quarter (low / central / high).
+- **Calibration:** actual ÷ weather-adjusted model over the last four published quarters,
+  applied to every forecast quarter, so over- or under-runs carry through to the rest of the year
+  and later years.
+- **Actuals:** published quarters replace the forecast; a published annual levelisation replaces
+  the sum of the quarters for that year.
