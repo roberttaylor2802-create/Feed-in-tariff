@@ -18,12 +18,14 @@ Streamlit app with three tabs:
 | `solar.py` | Solar data and calculations | – |
 | `fit.py` | FiT cost forecast | – |
 | `demand.py` | Demand and exemptions forecast | – |
+| `elexon.py` | Downloads Class A licence-exempt supply (Elexon S0621) | – |
 | `solar_daily.csv` | Daily GB solar (PV_Live) | Use the app's update button, then upload the file |
 | `quarterly_actuals.csv` | Ofgem levelisation fund by quarter | Each quarter Ofgem publishes |
 | `annual_levelisation.csv` | Ofgem annual levelisation by year | Each annual reconciliation |
 | `tariff_assumptions.csv` | Tariff uplift each April (CPI) | When CPI forecasts change |
 | `demand_quarterly.csv` | Ofgem-reported supply and EII exempt volume by quarter | Each quarter Ofgem publishes |
 | `exemptions.csv` | EII, BICS, Class A and other exemption forecasts | When forecasts change |
+| `class_a_daily.csv` | Daily licence-exempt supply from Elexon (created by the app) | After clicking “Update from Elexon”, download and upload it |
 | `demand_annual_history.csv` | Annual gross supply before 2024/25 (DESNZ RO basis) | Rarely |
 | `fit_portfolio.csv` | Every FiT installation costed by delivery year | New Ofgem installation report |
 | `requirements.txt` | Python packages | – |

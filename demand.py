@@ -119,8 +119,39 @@ def quarter_profile(inp: dict) -> tuple[np.ndarray, np.ndarray]:
 
 # ---------------------------------------------------------------- forecast
 
+QUARTER_DAYS = {1: 91, 2: 92, 3: 92, 4: 90}
+
+
+def class_a_series(class_a_q: pd.DataFrame | None, growth: float, years: list[int]) -> tuple[dict, dict]:
+    """Class A (licence-exempt) supply by quarter from Elexon S0621: complete quarters as reported,
+    a part-reported quarter scaled up by its daily average, later quarters at the last four complete
+    quarters' run-rate growing at `growth` a year. Returns ({(year, q): TWh}, {(year, q): status})."""
+    if class_a_q is None or class_a_q.empty:
+        return {}, {}
+    cq = class_a_q.sort_values(["year_start", "quarter"])
+    done = cq[cq["complete"]]
+    base_rate = (done.tail(4)["class_a_twh"].mean() if len(done) else
+                 (cq["class_a_twh"] / cq["days"]).iloc[-1] * 91)
+    last = done.iloc[-1] if len(done) else cq.iloc[-1]
+    t0 = last["year_start"] + (last["quarter"] - 1) / 4
+    vals, status = {}, {}
+    for y in years:
+        for q in range(1, 5):
+            r = cq[(cq["year_start"] == y) & (cq["quarter"] == q)]
+            if len(r) and bool(r["complete"].iloc[0]):
+                vals[(y, q)], status[(y, q)] = float(r["class_a_twh"].iloc[0]), "Elexon"
+            elif len(r):
+                vals[(y, q)] = float(r["class_a_twh"].iloc[0] / r["days"].iloc[0] * QUARTER_DAYS[q])
+                status[(y, q)] = "Elexon, part quarter"
+            else:
+                vals[(y, q)] = float(base_rate * (1 + growth) ** max(0.0, y + (q - 1) / 4 - t0))
+                status[(y, q)] = "Forecast"
+    return vals, status
+
+
 def forecast(inp: dict, method: str, bics_takeup: float = 1.0, carry_variance: bool = True,
-             start_year: int = 2026, years: int = 6, history_years: int = 5) -> dict:
+             start_year: int = 2026, years: int = 6, history_years: int = 5,
+             class_a_q: pd.DataFrame | None = None, class_a_growth: float = 0.0) -> dict:
     hist = annual_history(inp)
     past = hist[hist["year_start"] < start_year].tail(history_years)
     y = past["gross_twh"].to_numpy()
@@ -138,6 +169,7 @@ def forecast(inp: dict, method: str, bics_takeup: float = 1.0, carry_variance: b
     variance = cur["supplied_twh"].sum() / fc_ytd if len(cur) else 1.0
 
     # Exemption forecasts
+    ca_vals, ca_status = class_a_series(class_a_q, class_a_growth, yrs)
     ex = inp["exemptions"].set_index("year_start")
     rows = []
     prev = {"gross": y[-1], "eii": None, "bics": None}
@@ -165,10 +197,12 @@ def forecast(inp: dict, method: str, bics_takeup: float = 1.0, carry_variance: b
                 gq = g_q * (variance if (carry_variance or yr == start_year) else 1.0)
                 eq = eii_ann * eii_shares[qt - 1]
                 bq = bics_full * bics_takeup / 4
-            ca, ot = class_a / 4, other / 4
+            ca = ca_vals.get((yr, qt), class_a / 4)
+            ot = other / 4
             rows.append({"year_start": yr, "Delivery year": solar.label(yr), "quarter": qt, "Quarter": QUARTER_NAMES[qt],
                          "Status": "Actual" if actual else "Forecast",
                          "Gross TWh": gq, "EII TWh": eq, "BICS TWh": bq, "Class A TWh": ca, "Other TWh": ot,
+                         "Class A source": ca_status.get((yr, qt), "exemptions.csv"),
                          "Liable TWh": gq - eq - bq - ca - ot})
     qdf = pd.DataFrame(rows)
     annual = qdf.groupby(["year_start", "Delivery year"], as_index=False)[

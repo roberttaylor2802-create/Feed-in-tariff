@@ -14,6 +14,7 @@ import requests
 import streamlit as st
 
 import demand
+import elexon
 import fit
 import solar
 
@@ -157,7 +158,41 @@ with tab_demand:
     carry = c[2].toggle("Carry this year’s variance forward", value=True, key="d_carry",
                         help="If published quarters this year run above or below the forecast, scale the rest of this "
                              "year and later years by the same ratio. The rest of this year is always scaled.")
-    c[3].markdown("Exempt volumes not yet published (Class A, other) are set in the inputs below.")
+    ca_source = c[3].radio("Class A exempt supply", ["Elexon S0621", "exemptions.csv"], key="d_ca",
+                           help="Elexon publishes licence-exempt supply volumes daily since P442 (February 2025).")
+
+    ca_q = None
+    with st.expander("Class A licence-exempt supply from Elexon (S0621)", expanded=ca_source == "Elexon S0621"):
+        st.write("Elexon’s Total Exempt Supply Volume (S0621) reports, for each settlement date, the electricity "
+                 "supplied under licence exemptions behind licensed suppliers’ meters, as notified by Exempt Supply "
+                 "Notification Agents under BSC Modification P442. Download it here, then upload the saved "
+                 "`class_a_daily.csv` to GitHub to keep it.")
+        cc = st.columns([1, 1, 2])
+        ca_growth = cc[0].number_input("Growth after the last full quarter (% a year)", value=0.0, step=5.0, key="d_cag") / 100
+        if cc[1].button("Update from Elexon", help="Downloads every settlement date since 27 February 2025 not yet saved, "
+                                                  "and refreshes the last 120 days for later settlement runs."):
+            bar = st.progress(0.0, text="Downloading from Elexon…")
+            try:
+                n = elexon.update(progress=lambda p: bar.progress(p, text="Downloading from Elexon…"))
+                st.success(f"Saved {n} days.")
+            except (requests.RequestException, ValueError) as e:
+                st.error(f"Couldn’t download from Elexon: {e}")
+        ca_daily = elexon.load_daily()
+        if ca_daily.empty:
+            st.info("No Elexon data saved yet. Click “Update from Elexon”; until then Class A uses `exemptions.csv`.")
+        else:
+            ca_q = elexon.quarterly(ca_daily)
+            cc[2].download_button("Download class_a_daily.csv", ca_daily.assign(date=ca_daily["date"].dt.date)
+                                  .to_csv(index=False).encode(), "class_a_daily.csv", "text/csv")
+            show = ca_q.assign(**{"Delivery year": ca_q["year_start"].map(solar.label),
+                                  "Quarter": ca_q["quarter"].map(demand.QUARTER_NAMES),
+                                  "Exempt supply GWh": ca_q["class_a_twh"] * 1000})
+            st.dataframe(show[["Delivery year", "Quarter", "Exempt supply GWh", "days", "complete"]]
+                         .style.format({"Exempt supply GWh": "{:,.1f}"}), width="stretch", hide_index=True)
+            st.caption(f"{len(ca_daily)} settlement dates, {ca_daily['date'].min():%d %b %Y} to "
+                       f"{ca_daily['date'].max():%d %b %Y}. Settlement runs: {', '.join(sorted(set(','.join(ca_daily['run'].astype(str)).split(','))))}.")
+    if ca_source != "Elexon S0621":
+        ca_q = None
 
     with st.expander("Update with Ofgem supply volumes and exemption assumptions"):
         st.write("Each Ofgem FIT quarterly report gives the electricity suppliers reported supplying in the quarter and "
@@ -186,7 +221,7 @@ with tab_demand:
             "annual": base_d["annual"],
             "exemptions": _num(dx, ["year_start", "eii_twh", "bics_full_takeup_twh", "class_a_twh", "other_twh"])}
     dinp["quarterly"][["year_start", "quarter"]] = dinp["quarterly"][["year_start", "quarter"]].astype(int)
-    dfc = demand.forecast(dinp, d_method, takeup / 100, carry)
+    dfc = demand.forecast(dinp, d_method, takeup / 100, carry, class_a_q=ca_q, class_a_growth=ca_growth)
     LIABLE = {**demand.historic_liable(dinp), **demand.liable_by_year(dfc)}
     LIABLE_Q = demand.liable_by_quarter(dfc)
     DEMAND_LABEL = f"{d_method}, BICS {takeup}%"
@@ -254,7 +289,8 @@ with tab_demand:
     st.markdown("**Liable demand by forecast method, TWh** (at the selected BICS take-up and variance setting)")
     comp = {}
     for m in demand.METHODS:
-        comp[m] = demand.forecast(dinp, m, takeup / 100, carry)["annual"].set_index("Delivery year")["Liable TWh"]
+        comp[m] = demand.forecast(dinp, m, takeup / 100, carry, class_a_q=ca_q,
+                                  class_a_growth=ca_growth)["annual"].set_index("Delivery year")["Liable TWh"]
     st.dataframe(pd.DataFrame(comp).style.format("{:,.1f}"), width="stretch")
 
     with st.expander("Exemptions explained and how demand updates"):
@@ -266,8 +302,13 @@ with tab_demand:
   13.6 TWh for 2027/28, then grow with gross demand.
 - **BICS (British Industrial Competitiveness Scheme):** exempt from April 2027. BIST forecast 15.7 TWh for 2027/28 at
   full take-up; the take-up setting scales it. Eligible businesses are confirmed in early 2027.
-- **Class A exempt supply:** electricity supplied under the Class A licence exemption and reported through Elexon (P442).
-  No public total is available, so it is an input in `exemptions.csv` (default 0).
+- **Class A exempt supply:** electricity supplied under licence exemptions (such as Class A) behind licensed
+  suppliers’ meters. Since P442 (27 February 2025) Elexon publishes the daily total as S0621, used here when
+  downloaded: complete quarters as reported, a part quarter scaled up, later quarters at the last four quarters’
+  run-rate plus the growth you set. Elexon’s volumes are settlement volumes, adjusted for line losses, so they run
+  slightly above customer-metered volumes. Check with your levelisation team whether suppliers’ reported FiT supply
+  already excludes these volumes; if it does, deducting them again would double-count, so choose `exemptions.csv`
+  (default 0).
 - **Other:** any further exempt volume you want to model, such as new policy exemptions.
 - **Forecast methods:** fitted to five years of annual gross demand, then spread across quarters using the average
   quarterly pattern of the full Ofgem years. Published quarters replace the forecast; the remaining quarters of the
